@@ -1,0 +1,44 @@
+name: CI
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Formatting, vet and module boundary
+        run: |
+          test -z "$(gofmt -l .)"
+          go vet ./...
+          bash scripts/check-module-boundary.sh
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum
+      - name: Unit and race tests
+        run: go test -race ./... -count=1 -timeout=3m
+  live:
+    runs-on: ubuntu-latest
+    services:
+      rabbitmq:
+        image: rabbitmq:3-management
+        ports:
+          - 5672:5672
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q check_port_connectivity"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Broker delivery contract
+        env:
+          SPINE_TEST_RABBITMQ_URL: amqp://guest:guest@127.0.0.1:5672/
+        run: go test -race . -run '^TestLive' -count=1 -timeout=2m
