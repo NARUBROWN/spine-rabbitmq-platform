@@ -2,7 +2,22 @@
 
 RabbitMQ를 Spine의 공개 이벤트 계약 `spine.event-adapter/v1`에 연결하는 Go 모듈입니다. `adapter/event`의 Factory, Reader, Delivery와 Publisher를 구현하며 도메인 이벤트, DI나 커널 내부 패키지를 import하지 않습니다.
 
-현재는 독립적인 전송 factory를 제공합니다. Spine App의 factory 등록과 기존 `boot.Options.RabbitMQ` 대체는 후속 단계입니다. 아래 예제는 계약을 직접 사용하는 코드이며 App 자동 연결을 의미하지 않습니다. 이 초기 개발 버전은 계약을 추가한 Spine 커밋 `1889d66`의 pseudo-version을 의존합니다.
+App에는 `spine.WithEventAdapter(name, factory)`로 등록합니다. 브로커 연결은 이 플랫폼이, 소비 실행과 reader 재연결은 코어가 맡습니다. 아래는 HTTP 없는 워커 구성입니다. HTTP 앱은 `spine.New`에 Echo 플랫폼 옵션도 함께 넘깁니다. 초기 개발 버전이며 App 연결을 포함한 Spine 개발 커밋을 go.mod에 고정합니다.
+
+```go
+import (
+    "github.com/NARUBROWN/spine"
+    rabbitmqplatform "github.com/NARUBROWN/spine-rabbitmq-platform"
+)
+
+func buildWorker() (spine.App, error) {
+    factory, err := rabbitmqplatform.NewFactory(rabbitmqplatform.Config{URL: "amqps://rabbitmq.example.com:5671/", Exchange: "events", Consume: true, Publish: true})
+    if err != nil { return nil, err }
+    return spine.New(spine.WithEventAdapter("rabbitmq", factory)), nil
+}
+```
+
+기존 consumer 생성자와 `app.Consumers().Register`를 등록한 뒤 `app.Run(boot.Options{})`로 실행합니다. 공통 정책은 `spine.WithEventConsumerRetry`와 `spine.WithEventSettlementTimeout`으로 조정합니다. Prepare는 reader를 보관하고 Run이 같은 준비 경로에서 소비를 시작합니다. [App 전환 안내](https://github.com/NARUBROWN/spine/blob/5d8ea93/docs/migration/event-platforms.md)를 참고하세요.
 
 ## 사용
 
