@@ -8,7 +8,7 @@ import (
 	"slices"
 	"sync/atomic"
 
-	eventadapter "github.com/NARUBROWN/spine/adapter/event"
+	eventadapter "github.com/NARUBROWN/spine/contract/event"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 

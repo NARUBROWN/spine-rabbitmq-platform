@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	eventadapter "github.com/NARUBROWN/spine/adapter/event"
+	eventadapter "github.com/NARUBROWN/spine/contract/event"
 )
 
 // lifecycle는 새 작업 차단, 진행 작업 대기와 한 번의 자원 정리를 관리합니다.

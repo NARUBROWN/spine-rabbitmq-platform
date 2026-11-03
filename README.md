@@ -2,7 +2,7 @@
 
 RabbitMQ를 Spine의 공개 이벤트 계약 `spine.event-adapter/v1`에 연결하는 Go 모듈입니다. `adapter/event`의 Factory, Reader, Delivery와 Publisher를 구현하며 도메인 이벤트, DI나 커널 내부 패키지를 import하지 않습니다.
 
-App에는 `spine.WithEventAdapter(name, factory)`로 등록합니다. 브로커 연결은 이 플랫폼이, 소비 실행과 reader 재연결은 코어가 맡습니다. 아래는 HTTP 없는 워커 구성입니다. HTTP 앱은 `spine.New`에 Echo 플랫폼 옵션도 함께 넘깁니다. 초기 개발 버전이며 App 연결을 포함한 Spine 개발 커밋을 go.mod에 고정합니다.
+App에는 `spine.WithEventAdapter(name, factory)`로 등록합니다. 브로커 연결은 이 플랫폼이, 소비 실행과 reader 재연결은 코어가 맡습니다. 아래는 HTTP 없는 워커 구성입니다. HTTP 앱은 `spine.New`에 Echo 플랫폼 옵션도 함께 넘깁니다. Spine v0.6.5의 공개 이벤트 계약과 App 연결 API를 사용합니다.
 
 ```go
 import (
@@ -25,7 +25,7 @@ func buildWorker() (spine.App, error) {
 import (
     "context"
 
-    eventadapter "github.com/NARUBROWN/spine/adapter/event"
+    eventadapter "github.com/NARUBROWN/spine/contract/event"
     rabbitmqplatform "github.com/NARUBROWN/spine-rabbitmq-platform"
 )
 
@@ -90,3 +90,11 @@ SPINE_TEST_RABBITMQ_URL=amqp://guest:guest@localhost:5672/ go test -race . -run 
 브로커 환경변수가 없으면 live 테스트는 건너뜁니다. Live 테스트는 binary 본문·header 왕복, mandatory return, publisher confirm, requeue 재전달과 reject 후 dead-letter 보존을 검사합니다. CI는 단위·race 검사와 RabbitMQ 기반 live 검사를 분리해서 실행합니다. 운영 TLS·인증·클러스터 장애는 별도로 검증해야 합니다.
 
 라이선스: [MIT](LICENSE). 계약: [Spine adapter/event](https://github.com/NARUBROWN/spine/tree/1889d66/adapter/event).
+
+## v0.1.0 호환 버전
+
+이 릴리스는 공개 계약을 포함한 Spine `v0.6.5` 이상을 요구합니다. 개인 경로의 `replace` 없이 정식 태그로 설치합니다.
+
+```sh
+go get github.com/NARUBROWN/spine-rabbitmq-platform@v0.1.0
+```
