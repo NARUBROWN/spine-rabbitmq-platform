@@ -1,0 +1,30 @@
+name: Publish Rc
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 발행할 새 RC 태그
+        type: string
+        required: true
+      preview_tag:
+        description: 전체 검증을 마친 Preview 태그
+        type: string
+        required: true
+      observation_override_reason:
+        description: 관찰 기간 단축 사유, 평소에는 비움
+        type: string
+        default: ''
+permissions:
+  contents: write
+  actions: read
+concurrency:
+  group: release-publication
+  cancel-in-progress: false
+jobs:
+  publish:
+    uses: ./.github/workflows/release-pipeline.yml
+    with:
+      channel: rc
+      source: ${{ inputs.preview_tag }}
+      version: ${{ inputs.version }}
+      observation_override_reason: ${{ inputs.observation_override_reason }}
