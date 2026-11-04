@@ -1,0 +1,25 @@
+name: Publish Preview
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 발행할 새 채널 태그
+        type: string
+        required: true
+      source_sha:
+        description: preview HEAD의 전체 커밋 SHA
+        type: string
+        required: true
+permissions:
+  contents: write
+  actions: read
+concurrency:
+  group: release-publication
+  cancel-in-progress: false
+jobs:
+  publish:
+    uses: ./.github/workflows/release-pipeline.yml
+    with:
+      channel: preview
+      source: ${{ inputs.source_sha }}
+      version: ${{ inputs.version }}
