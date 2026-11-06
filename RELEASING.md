@@ -6,7 +6,7 @@
 
 | 채널 | 코어 고정 버전 | 이 모듈의 태그 |
 | --- | --- | --- |
-| Preview | v0.7.0-preview.1 | v0.2.0-preview.1 |
+| Preview | v0.7.0-preview.4 | v0.2.0-preview.2 |
 | RC | v0.7.0-rc.1 | v0.2.0-rc.1 |
 | 정식 | v0.7.0 | v0.2.0 |
 
@@ -46,7 +46,7 @@ Preview 완료 후 72시간, RC 완료 후 24시간을 관찰합니다. 정식 �
 코어의 다음 채널 후보 태그를 먼저 발행한 후 전용 승격 브랜치에서 의존성을 갱신합니다.
 
 ```sh
-git switch -c promote/rc/v0.2.0-rc.1 v0.2.0-preview.1
+git switch -c promote/rc/v0.2.0-rc.1 v0.2.0-preview.2
 python3 scripts/release/pin_channel.py --channel rc --apply --tidy
 ```
 
@@ -54,7 +54,7 @@ RC 승격 PR은 rc를 대상으로 합니다. 정식은 `promote/stable/v0.2.0`�
 
 검증된 후보의 후속 커밋인지, 코드 fingerprint가 같은지, 같은 기본 버전의 공식 의존성 채널 변경만 있는지 검사합니다. 코드나 일반 라이브러리, 코어 기본 버전이 바뀌면 새 Preview가 필요합니다. 태그는 재사용하지 않습니다.
 
-다섯 플랫폼을 발행한 후 코어 저장소의 **Complete Core Release Cohort**를 실행해야 코어의 조합도 완료됩니다. 하나의 플랫폼 발행 성공이 전체 조합 완료를 뜻하지 않습니다. 예제는 정식 조합 완료 후 갱신하며 이 모듈 후보의 선행 조건이 아닙니다.
+여섯 플랫폼을 발행한 후 코어 저장소의 **Complete Core Release Combination**를 실행해야 코어의 조합도 완료됩니다. 하나의 플랫폼 발행 성공이 전체 조합 완료를 뜻하지 않습니다. 예제는 정식 조합 완료 후 갱신하며 이 모듈 후보의 선행 조건이 아닙니다.
 
 ## 검증 명령
 
