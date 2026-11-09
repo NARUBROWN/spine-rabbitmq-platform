@@ -47,6 +47,8 @@ def modules(directory, env, expected):
         replacement = item.get("Replace")
         if replacement and item["Path"] != "github.com/NARUBROWN/spine-simple-msa":
             raise ReleaseError(f"공개 검증에 replace가 남아 있습니다: {item['Path']}")
+        if item["Path"] == CORE and CORE not in expected:
+            found[CORE] = item.get("Version")
         if item["Path"] in expected:
             if item.get("Version") != expected[item["Path"]] or replacement:
                 raise ReleaseError(f"검증 대상 버전 불일치: {item['Path']} {item.get('Version')}")
@@ -110,7 +112,7 @@ def verify(plan, source, work, env, query, scope="cohort"):
     elif scope == "platform":
         if plan["kind"] != "platform":
             raise ReleaseError("플랫폼 검증은 플랫폼에만 적용합니다")
-        expected = {CORE: selected_components["core_version"], module: resolved}
+        expected = {module: resolved}
     else:
         if plan["kind"] != "core" or resolved != selected_components["core_version"]:
             raise ReleaseError("전체 조합의 코어 버전이 계획과 다릅니다")
@@ -124,7 +126,7 @@ def verify(plan, source, work, env, query, scope="cohort"):
             path.chmod(0o755 if path.is_dir() else 0o644)
         go_tests(["-mod=readonly", "-race", "./...", "-count=1", "-timeout=4m"], tests, env)
         execute(["go", "vet", "-mod=readonly", "./..."], tests, env)
-        modules(tests, env, {CORE: selected_components["core_version"]})
+        modules(tests, env, {})
     elif scope == "cohort":
         for name in ("platform-e2e", "openapi"):
             tests = work / name

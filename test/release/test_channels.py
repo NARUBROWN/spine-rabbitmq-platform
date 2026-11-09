@@ -39,6 +39,30 @@ def platform_policy(name):
 
 
 class ChannelPolicyTests(unittest.TestCase):
+    def test_platform_policy_is_independent_of_core_release_channels(self):
+        policy = platform_policy(release.CORE + "-echo-platform")
+        policy.pop("ci_core")
+        for selected in policy["channels"].values():
+            selected.pop("core_version")
+        release.validate_policy(policy)
+        self.assertEqual(release.expected_modules({"module": policy["module"], "version": "v0.2.0-preview.1", "components": policy["channels"]["preview"]}, "platform"), {policy["module"]: "v0.2.0-preview.1"})
+
+    def test_existing_platform_manifests_keep_their_core_evidence(self):
+        module = release.CORE + "-echo-platform"
+        old = {"module": module, "version": "v0.2.0-preview.1", "components": {"core_version": "v0.7.0-preview.2"}}
+        self.assertEqual(release.expected_modules(old, "platform"), {module: "v0.2.0-preview.1", release.CORE: "v0.7.0-preview.2"})
+        report = {"selected_modules": {module: "v0.2.0-preview.1", release.CORE: "v0.7.0-preview.4"}}
+        self.assertFalse(release.selected_modules_match(old, report, "platform"))
+        old["components"] = {"modules": {}}
+        self.assertTrue(release.selected_modules_match(old, report, "platform"))
+
+    def test_platform_promotion_preserves_exact_contract_dependency(self):
+        before = b"module example.com/adapter\nrequire github.com/NARUBROWN/spine v0.7.0-preview.2\n"
+        after = before.replace(b"v0.7.0-preview.2", b"v0.7.0-rc.1")
+        self.assertNotEqual(release.normalized_file("go.mod", before, platform=True), release.normalized_file("go.mod", after, platform=True))
+        checksum = b"github.com/NARUBROWN/spine v0.7.0-preview.2 h1:old\n"
+        self.assertEqual(release.normalized_file("go.sum", checksum, platform=True), checksum)
+
     def test_channel_selection_distinguishes_branches_from_complete_tags(self):
         expected = {"preview": "preview", "rc": "rc", "main": "stable",
                     "v0.7.0-preview.1": "preview", "v0.7.0-rc.1": "rc", "v0.7.0": "stable",
@@ -72,8 +96,9 @@ class ChannelPolicyTests(unittest.TestCase):
             for value in ("v0.7.0", "v0.7.0-rc.1", "main", "v0.7.0-0.20261104000000-aaaaaaaaaaaa"):
                 bad = copy.deepcopy(policy)
                 bad["channels"]["preview"]["core_version"] = value
-                with self.subTest(value=value), self.assertRaises(release.ReleaseError):
-                    release.validate_policy(bad)
+                if policy["kind"] == "core" or value in ("main", "v0.7.0-0.20261104000000-aaaaaaaaaaaa"):
+                    with self.subTest(value=value), self.assertRaises(release.ReleaseError):
+                        release.validate_policy(bad)
         bad = core_policy()
         bad["channels"]["preview"]["modules"].pop(next(iter(release.PLATFORMS)))
         with self.assertRaises(release.ReleaseError):
@@ -111,8 +136,7 @@ class ChannelPolicyTests(unittest.TestCase):
             self.assertEqual(mod.read_text(), original)
             pin_channel.pin(root, "rc", apply=True)
             release.check_module(policy, "rc", root)
-            with self.assertRaises(release.ReleaseError):
-                release.check_module(policy, "preview", root)
+            release.check_module(policy, "preview", root)
 
     def test_source_workspace_builds_without_querying_unpublished_tags(self):
         policy = platform_policy(release.CORE + "-echo-platform")
@@ -168,9 +192,9 @@ class ChannelPolicyTests(unittest.TestCase):
             source = github.candidate()
             selected = github.manifests[source]["validation"]["selected_modules"]
             if replacement is None:
-                selected.pop(release.CORE)
+                selected.pop(POLICY["module"])
             else:
-                selected[release.CORE] = replacement
+                selected[POLICY["module"]] = replacement
             with self.subTest(replacement=replacement), self.assertRaises(release.ReleaseError):
                 release.make_plan(github, POLICY, "rc", POLICY["next_version"] + "-rc.1", source, now=NOW)
 

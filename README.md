@@ -100,3 +100,7 @@ SPINE_TEST_RABBITMQ_URL=amqp://guest:guest@localhost:5672/ go test -race . -run 
 ```sh
 go get github.com/NARUBROWN/spine-rabbitmq-platform@v0.1.0
 ```
+
+## 릴리스와 공개 계약
+
+이 플랫폼은 자체 버전과 채널로 발행합니다. `go.mod`의 Spine 버전은 사용하는 공개 계약의 최소 의존성이며 코어 릴리스 채널과 별도로 관리합니다. CI와 공개 설치 검증은 이 모듈의 의존성으로 플랫폼 자체를 검사합니다. 새로운 코어와 기존 플랫폼 태그의 조합 검증은 코어 릴리스에서 수행합니다.

@@ -15,17 +15,13 @@
   },
   "channels": {
     "preview": {
-      "core_version": "v0.7.0-preview.4",
       "modules": {}
     },
     "rc": {
-      "core_version": "v0.7.0-rc.1",
       "modules": {}
     },
     "stable": {
-      "core_version": "v0.7.0",
       "modules": {}
     }
-  },
-  "ci_core": "98f95bd02c7e9a22cf5cb6450d479adf2808c940"
+  }
 }
