@@ -1,0 +1,27 @@
+{
+  "schema_version": "spine.release-policy/v2",
+  "kind": "platform",
+  "module": "github.com/NARUBROWN/spine-rabbitmq-platform",
+  "next_version": "v0.2.0",
+  "preview_hours": 72,
+  "rc_hours": 24,
+  "stable_interval_hours": 168,
+  "approval_environment": "release-stable",
+  "reviewer_login": "NARUBROWN",
+  "branches": {
+    "preview": "preview",
+    "rc": "rc",
+    "stable": "main"
+  },
+  "channels": {
+    "preview": {
+      "modules": {}
+    },
+    "rc": {
+      "modules": {}
+    },
+    "stable": {
+      "modules": {}
+    }
+  }
+}

@@ -1,0 +1,133 @@
+name: Platform Release Pipeline
+on:
+  workflow_call:
+    inputs:
+      channel:
+        type: string
+        required: true
+      version:
+        type: string
+        default: ''
+      source:
+        type: string
+        required: true
+      observation_override_reason:
+        type: string
+        default: ''
+    secrets:
+      DISCORD_WEBHOOK_PREVIEW:
+        required: false
+      DISCORD_WEBHOOK_RC:
+        required: false
+      DISCORD_WEBHOOK_RELEASE:
+        required: false
+permissions:
+  contents: read
+  actions: read
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.plan.outputs.sha }}
+      version: ${{ steps.plan.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.0'
+      - name: Validate exact source, channel and dependency pins
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_CHANNEL: ${{ inputs.channel }}
+          RELEASE_VERSION: ${{ inputs.version }}
+          RELEASE_SOURCE: ${{ inputs.source }}
+          RELEASE_OVERRIDE_REASON: ${{ inputs.observation_override_reason }}
+        run: python3 scripts/release/release.py plan
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-plan
+          path: release-plan.json
+          if-no-files-found: error
+  platform-ci:
+    needs: plan
+    uses: ./.github/workflows/ci.yml
+    with:
+      ref: ${{ needs.plan.outputs.sha }}
+      public_dependencies: true
+  public-before-tag:
+    needs: plan
+    uses: ./.github/workflows/release-public-check.yml
+    with:
+      source_sha: ${{ needs.plan.outputs.sha }}
+      query: ${{ needs.plan.outputs.sha }}
+      artifact: public-before-tag
+      scope: platform
+  tag:
+    needs: [plan, platform-ci, public-before-tag]
+    if: ${{ always() && needs.plan.result == 'success' && needs.platform-ci.result == 'success' && needs.public-before-tag.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+    environment: ${{ inputs.channel == 'stable' && 'release-stable' || format('release-{0}', inputs.channel) }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-plan
+      - name: Create immutable tag after source verification
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERIFIED_SHA: ${{ needs.platform-ci.outputs.verified_sha }}
+        run: python3 scripts/release/release.py tag
+      - name: Notify Discord of the new tag
+        uses: NARUBROWN/spine/.github/actions/discord-tag@b55c182f4d0722fca5aaf3b963bca20cf0dcc4d4
+        continue-on-error: true
+        timeout-minutes: 1
+        with:
+          plan: release-plan.json
+          webhook_preview: ${{ secrets.DISCORD_WEBHOOK_PREVIEW }}
+          webhook_rc: ${{ secrets.DISCORD_WEBHOOK_RC }}
+          webhook_release: ${{ secrets.DISCORD_WEBHOOK_RELEASE }}
+  public:
+    needs: [plan, tag]
+    uses: ./.github/workflows/release-public-check.yml
+    with:
+      source_sha: ${{ needs.plan.outputs.sha }}
+      query: ${{ needs.plan.outputs.version }}
+      artifact: public-after-tag
+      scope: platform
+  finish:
+    needs: [plan, tag, public]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-plan
+      - uses: actions/download-artifact@v4
+        with:
+          name: public-after-tag
+      - name: Complete platform publication
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/release/release.py finish
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-manifest-${{ needs.plan.outputs.version }}
+          path: release-manifest.json
+          if-no-files-found: error
+          retention-days: 90
