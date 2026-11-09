@@ -1,8 +1,17 @@
 # Spine RabbitMQ Platform
 
-> 이 작업 소스의 대상 버전은 `v0.2.0`이며 Preview, RC, 정식 채널로 발행합니다. [릴리스 운영](RELEASING.md)을 확인하세요. 기존 정식 `v0.1.0`은 변경하지 않습니다.
-
 RabbitMQ를 Spine의 공개 이벤트 계약 `spine.event-adapter/v1`에 연결하는 Go 모듈입니다. `adapter/event`의 Factory, Reader, Delivery와 Publisher를 구현하며 도메인 이벤트, DI나 커널 내부 패키지를 import하지 않습니다.
+
+## Preview 설치
+
+개발 중인 기능을 시험하고 호환성 문제를 확인하는 채널입니다. 공개 태그는 [`v0.2.0-preview.3`](https://github.com/NARUBROWN/spine-rabbitmq-platform/tree/v0.2.0-preview.3)입니다. 이 태그의 `go.mod`는 Spine `v0.7.0-preview.4`와 Go 1.25.5 이상을 지정합니다.
+
+```sh
+go get github.com/NARUBROWN/spine-rabbitmq-platform@v0.2.0-preview.3-preview.3
+```
+
+다른 채널은 [RC](https://github.com/NARUBROWN/spine-rabbitmq-platform/tree/rc) | [Stable](https://github.com/NARUBROWN/spine-rabbitmq-platform/tree/main)에서 확인하세요.
+
 
 App에는 `spine.WithEventAdapter(name, factory)`로 등록합니다. 브로커 연결은 이 플랫폼이, 소비 실행과 reader 재연결은 코어가 맡습니다. 아래는 HTTP 없는 워커 구성입니다. HTTP 앱은 `spine.New`에 Echo 플랫폼 옵션도 함께 넘깁니다. Spine v0.6.5의 공개 이벤트 계약과 App 연결 API를 사용합니다.
 
