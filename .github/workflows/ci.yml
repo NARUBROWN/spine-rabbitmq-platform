@@ -1,25 +1,113 @@
 name: CI
-on: [push, pull_request]
+on:
+  push:
+    branches: [preview, rc, main]
+  pull_request:
+    branches: [preview, rc, main]
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      ref:
+        type: string
+        required: true
+      public_dependencies:
+        type: boolean
+        default: false
+    outputs:
+      verified_sha:
+        value: ${{ jobs.verified.outputs.sha }}
 permissions:
   contents: read
+env:
+  PYTHONUTF8: '1'
+  GOWORK: 'off'
 jobs:
-  unit:
+  direction:
+    name: ${{ github.event_name == 'pull_request' && format('Branch Flow / {0}', github.base_ref) || 'Branch Direction' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
+      - run: node scripts/release/branch_flow.cjs
+  verify:
+    needs: direction
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
       - uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
-          cache: true
-      - name: Formatting, vet and module boundary
+          go-version: '1.26.0'
+      - name: Check exact source
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ inputs.ref || github.sha }}
+        run: test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+      - name: Go formatting
+        if: ${{ runner.os == 'Linux' }}
+        shell: bash
+        run: test -z "$(gofmt -l .)"
+      - name: Module boundary
+        if: ${{ runner.os == 'Linux' }}
+        run: bash scripts/check-module-boundary.sh
+      - name: Policy and controller tests
+        shell: bash
         run: |
-          test -z "$(gofmt -l .)"
-          go vet ./...
-          bash scripts/check-module-boundary.sh
+          python3 scripts/release/release.py validate-policy
+          python3 -m unittest discover -s test/release -p 'test_*.py'
+          node --test scripts/release/branch_flow.test.cjs
+          node scripts/release/branch_flow.cjs
+      - name: Verify dependency channel
+        shell: bash
+        env:
+          CHANNEL_REF: ${{ github.base_ref || github.ref_name }}
+        run: |
+          channel=$(python3 -c "import sys; sys.path.insert(0,'scripts/release'); from ci_workspace import channel_for; import os; print(channel_for(os.environ['CHANNEL_REF']))")
+          python3 scripts/release/release.py check-module --channel "$channel"
+      - name: Check public module reproducibility
+        if: ${{ inputs.public_dependencies }}
+        shell: bash
+        run: |
           go mod tidy
+          go mod verify
           git diff --exit-code -- go.mod go.sum
-      - name: Unit and race tests
-        run: go test -race ./... -count=1 -timeout=3m
+          test -z "$(go list -m -f '{{if .Replace}}{{.Path}}{{end}}' all)"
+      - name: Vet and unit tests
+        run: |
+          go vet ./...
+          go test ./... -count=1 -shuffle=on -timeout=5m
+      - name: Race detector
+        if: ${{ runner.os == 'Linux' }}
+        run: go test -race ./... -count=1 -shuffle=on -timeout=5m
+  verified:
+    name: ${{ github.event_name == 'pull_request' && format('Verified Source / {0}', github.base_ref) || 'Verified Source' }}
+    if: ${{ always() }}
+    needs: [direction, verify, live]
+    outputs:
+      sha: ${{ steps.source.outputs.sha }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require source verification
+        id: source
+        env:
+          SOURCE_SHA: ${{ inputs.ref || github.sha }}
+          DIRECTION: ${{ needs.direction.result }}
+          RESULT: ${{ needs.verify.result }}
+          LIVE_RESULT: ${{ needs.live.result }}
+          PUBLIC: ${{ inputs.public_dependencies }}
+        run: |
+          test "$DIRECTION" = success
+          test "$RESULT" = success
+          echo "sha=$SOURCE_SHA" >> "$GITHUB_OUTPUT"
+          test "$LIVE_RESULT" = success
   live:
     runs-on: ubuntu-latest
     services:
@@ -34,6 +122,9 @@ jobs:
           --health-retries 20
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
