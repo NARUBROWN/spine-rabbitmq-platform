@@ -46,23 +46,6 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.26.0'
-      - name: Read bootstrap core source
-        if: ${{ !inputs.public_dependencies }}
-        id: core
-        shell: bash
-        run: python3 -c "import json,os; p=json.load(open('.github/release-policy.json')); open(os.environ['GITHUB_OUTPUT'],'a').write('sha='+p['ci_core']+'\n')"
-      - uses: actions/checkout@v4
-        if: ${{ !inputs.public_dependencies }}
-        with:
-          repository: NARUBROWN/spine
-          ref: ${{ steps.core.outputs.sha }}
-          path: spine-core
-          persist-credentials: false
-      - name: Prepare bootstrap source workspace
-        if: ${{ !inputs.public_dependencies }}
-        shell: bash
-        run: |
-          python3 scripts/release/ci_workspace.py prepare --root . --output "$RUNNER_TEMP/contracts.work"
       - name: Check exact source
         shell: bash
         env:
@@ -146,23 +129,6 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - name: Read bootstrap core source
-        if: ${{ !inputs.public_dependencies }}
-        id: core
-        shell: bash
-        run: python3 -c "import json,os; p=json.load(open('.github/release-policy.json')); open(os.environ['GITHUB_OUTPUT'],'a').write('sha='+p['ci_core']+'\n')"
-      - uses: actions/checkout@v4
-        if: ${{ !inputs.public_dependencies }}
-        with:
-          repository: NARUBROWN/spine
-          ref: ${{ steps.core.outputs.sha }}
-          path: spine-core
-          persist-credentials: false
-      - name: Prepare bootstrap source workspace
-        if: ${{ !inputs.public_dependencies }}
-        shell: bash
-        run: |
-          python3 scripts/release/ci_workspace.py prepare --root . --output "$RUNNER_TEMP/contracts.work"
       - name: Broker delivery contract
         env:
           SPINE_TEST_RABBITMQ_URL: amqp://guest:guest@127.0.0.1:5672/

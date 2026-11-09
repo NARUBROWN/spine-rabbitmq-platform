@@ -75,6 +75,12 @@ def validate_policy(policy):
         raise ReleaseError("각 채널의 의존성 조합을 지정해야 합니다")
     core_base = None
     for channel, selected in policy["channels"].items():
+        if kind == "platform":
+            if selected.get("modules", {}):
+                raise ReleaseError("Platform release policies cannot pin core release combinations")
+            if "core_version" in selected:
+                parse_tag(selected["core_version"])
+            continue
         base, actual_channel, _ = parse_tag(selected["core_version"])
         if actual_channel != channel or (core_base is not None and base != core_base):
             raise ReleaseError("플랫폼은 동일 대상 버전과 같은 채널의 코어를 참조해야 합니다")
@@ -96,8 +102,8 @@ def validate_policy(policy):
             raise ReleaseError("소스 CI는 공식 플랫폼의 전체 커밋 SHA만 사용합니다")
     if kind == "core" and set(policy.get("ci_sources", {})) != PLATFORMS:
         raise ReleaseError("코어 소스 CI에는 다섯 플랫폼의 커밋이 필요합니다")
-    if kind == "platform" and not SHA.fullmatch(policy.get("ci_core", "")):
-        raise ReleaseError("플랫폼 소스 CI에는 코어의 전체 커밋 SHA가 필요합니다")
+    if policy.get("ci_core") and not SHA.fullmatch(policy["ci_core"]):
+        raise ReleaseError("Invalid historical core source SHA")
 
 
 def components(policy, channel="preview"):
@@ -105,6 +111,8 @@ def components(policy, channel="preview"):
 
 
 def expected_modules(plan, scope):
+    if scope == "platform" and "core_version" not in plan["components"]:
+        return {plan["module"]: plan["version"]}
     expected = {CORE: plan["components"]["core_version"]}
     if scope == "cohort":
         expected.update(plan["components"]["modules"])
@@ -118,16 +126,19 @@ def selected_modules_match(plan, report, scope):
     return isinstance(selected, dict) and all(selected.get(name) == version for name, version in expected_modules(plan, scope).items())
 
 
-def normalized_file(path, content):
+def normalized_file(path, content, *, platform=False):
     # 승격 시 허용하는 차이는 같은 기본 버전의 채널 태그와 CI 출처뿐입니다.
     if path == ".github/release-policy.json":
         value = json.loads(content)
         for name in ("ci_sources", "ci_core", "post_release_examples"):
             value.pop(name, None)
         for selected in value["channels"].values():
-            selected["core_version"] = parse_tag(selected["core_version"])[0]
+            if "core_version" in selected:
+                selected["core_version"] = parse_tag(selected["core_version"])[0]
             selected["modules"] = {name: parse_tag(version)[0] for name, version in selected.get("modules", {}).items()}
         return json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
+    if platform and path.rsplit("/", 1)[-1] in ("go.mod", "go.sum"):
+        return content
     if path.rsplit("/", 1)[-1] == "go.mod":
         names = "|".join(re.escape(name) for name in sorted(MANAGED))
         block = False
@@ -160,7 +171,7 @@ def source_fingerprint(github, sha):
         if path == ".github/release-policy.json" or path.rsplit("/", 1)[-1] in ("go.mod", "go.sum"):
             blob = github.api("git/blobs/" + digest)
             content = base64.b64decode(blob["content"])
-            digest = hashlib.sha256(normalized_file(path, content)).hexdigest()
+            digest = hashlib.sha256(normalized_file(path, content, platform=github.repository != CORE.removeprefix("github.com/"))).hexdigest()
         records.append((path, entry["mode"], entry["type"], digest))
     return hashlib.sha256(json.dumps(sorted(records), separators=(",", ":")).encode()).hexdigest()
 
@@ -170,8 +181,17 @@ def check_module(policy, channel, root):
     if parsed["Module"]["Path"] != policy["module"] or parsed.get("Replace"):
         raise ReleaseError("발행 모듈 경로가 다르거나 로컬 replace가 남아 있습니다")
     required = {item["Path"]: item["Version"] for item in (parsed.get("Require") or [])}
-    if policy["kind"] == "platform" and required.get(CORE) != components(policy, channel)["core_version"]:
-        raise ReleaseError("go.mod의 코어 버전이 발행 채널의 고정 버전과 다릅니다")
+    if policy["kind"] == "platform" and not required.get(CORE):
+        raise ReleaseError("Platform go.mod must declare its public contract dependency")
+    if policy["kind"] == "platform":
+        for name in ("e2e", "examples/worker"):
+            directory = root / name
+            if not (directory / "go.mod").is_file():
+                continue
+            child = json.loads(run("go", "mod", "edit", "-json", cwd=directory, env=dict(os.environ, GOWORK="off")))
+            selected = {item["Path"]: item["Version"] for item in child.get("Require") or []}
+            if not selected.get(CORE):
+                raise ReleaseError(f"{name}/go.mod must declare its public contract dependency")
     if policy["kind"] == "core" and any(name in MANAGED for name in required):
         raise ReleaseError("코어 본체는 플랫폼 모듈에 의존하지 않습니다")
     if policy["kind"] == "core":
@@ -416,7 +436,7 @@ def make_plan(github, policy, channel, version, source, reason="", now=None):
         upstream_sha = manifest["source_sha"]
         promotion_pr = promotion(github, source_sha, upstream_sha, branch, policy["branches"][expected], version)
         previous = manifest.get("components", {})
-        if (parse_tag(previous.get("core_version", ""))[0] != parse_tag(components(policy, channel)["core_version"])[0] or
+        if policy["kind"] == "core" and (parse_tag(previous.get("core_version", ""))[0] != parse_tag(components(policy, channel)["core_version"])[0] or
                 {name: parse_tag(version)[0] for name, version in previous.get("modules", {}).items()} !=
                 {name: parse_tag(version)[0] for name, version in components(policy, channel).get("modules", {}).items()}):
             raise ReleaseError("승격 시 기본 의존 버전을 변경할 수 없습니다. 새 Preview가 필요합니다")

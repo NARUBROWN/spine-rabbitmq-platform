@@ -16,6 +16,8 @@ def pin(root, channel, apply=False, tidy=False):
     policy = json.loads((root / ".github/release-policy.json").read_text(encoding="utf-8"))
     validate_policy(policy)
     selected = components(policy, channel)
+    if policy["kind"] == "platform" and "core_version" not in selected:
+        return
     expected = {CORE: selected["core_version"], **selected["modules"]}
     directories = [root]
     if policy["kind"] == "core":
