@@ -8,6 +8,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import tempfile
+import time
 
 from release import ReleaseError, run
 
@@ -95,6 +96,23 @@ def consumer(work, env, expected, imports):
     return modules(directory, env, expected)
 
 
+def wait_for_public_tag(module, version, directory, env):
+    target = f"{module}@{version}"
+    command = ["go", "mod", "download", "-json", target]
+    # 새 태그의 공개 체크섬이 전파될 때만 다시 조회합니다.
+    for delay in (15, 30, 60, 120, 0):
+        result = subprocess.run(command, cwd=directory, env=env, capture_output=True, text=True, timeout=60)
+        if result.returncode == 0:
+            return
+        error = result.stdout + result.stderr
+        waiting_for_checksum = (target in error and "verifying module" in error and
+                                "sum.golang.org/lookup/" in error and "404 Not Found" in error)
+        if not delay or not waiting_for_checksum:
+            raise ReleaseError(f"Public module download failed for {target}: {error.strip()}")
+        print(f"Public checksum for {target} is pending. Retrying in {delay}s.", flush=True)
+        time.sleep(delay)
+
+
 def verify(plan, source, work, env, query, scope="cohort"):
     if scope not in ("core", "platform", "cohort"):
         raise ReleaseError("공개 검증 범위를 지정해야 합니다")
@@ -103,6 +121,8 @@ def verify(plan, source, work, env, query, scope="cohort"):
             if not env.get(key):
                 raise ReleaseError(f"{key} 없이 브로커 E2E를 건너뛸 수 없습니다")
     module = plan["module"]
+    if query == plan.get("version"):
+        wait_for_public_tag(module, query, work, env)
     resolved = json.loads(subprocess.check_output(["go", "list", "-m", "-json", module + "@" + query], cwd=work, env=env, text=True))["Version"]
     selected_components = plan["components"]
     if scope == "core":
