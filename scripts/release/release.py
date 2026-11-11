@@ -496,7 +496,8 @@ def finish(github, plan, report, manifest_path="release-manifest.json"):
         for key in ("source_sha", "source_fingerprint", "components", "bootstrap_evidence", "platform_evidence"):
             if plan.get(key) != fresh.get(key):
                 raise ReleaseError("전체 조합 검증 중 후보 증거가 바뀌었습니다")
-    manifest = dict(plan, validation=report)
+    manifest = dict(plan, workflow_run_attempt=os.environ.get("GITHUB_RUN_ATTEMPT", "1"),
+                    validation=report)
     path = Path(manifest_path).resolve()
     path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     # 후보는 태그와 Actions artifact로 검증 기록을 남기고 정식 버전만 GitHub Release를 공개합니다.

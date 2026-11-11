@@ -4,10 +4,10 @@ RabbitMQ를 Spine의 공개 이벤트 계약 `spine.event-adapter/v1`에 연결�
 
 ## Preview 설치
 
-개발 중인 기능을 시험하고 호환성 문제를 확인하는 채널입니다. 공개 태그는 [`v0.2.0-preview.3`](https://github.com/NARUBROWN/spine-rabbitmq-platform/tree/v0.2.0-preview.3)입니다. 이 태그의 `go.mod`는 Spine `v0.7.0-preview.4`와 Go 1.25.5 이상을 지정합니다.
+개발 중인 기능을 시험하고 호환성 문제를 확인하는 채널입니다. 공개 태그는 [`v0.2.0-preview.3`](https://github.com/NARUBROWN/spine-rabbitmq-platform/tree/v0.2.0-preview.3)입니다. 이 태그의 `go.mod`는 Spine `v0.7.0-preview.4`와 Go 1.25.5 이상을 지정합니다. 이 브랜치의 릴리스 정책 기준 버전은 `v0.2.0`입니다.
 
 ```sh
-go get github.com/NARUBROWN/spine-rabbitmq-platform@v0.2.0-preview.3-preview.3
+go get github.com/NARUBROWN/spine-rabbitmq-platform@v0.2.0-preview.3
 ```
 
 다른 채널은 [RC](https://github.com/NARUBROWN/spine-rabbitmq-platform/tree/rc) | [Stable](https://github.com/NARUBROWN/spine-rabbitmq-platform/tree/main)에서 확인하세요.

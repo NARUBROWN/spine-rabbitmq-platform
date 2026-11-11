@@ -271,11 +271,13 @@ class ReleasePolicyTests(unittest.TestCase):
                 report = {"result": "passed", "version": version, "source_sha": SOURCE, "components": plan["components"], "scope": "cohort" if POLICY["kind"] == "core" else "platform"}
                 report["selected_modules"] = release.expected_modules(plan, report["scope"])
                 self.github.tags[version] = SOURCE
-                with tempfile.TemporaryDirectory() as directory, patch.object(release, "run") as command, patch.object(release, "complete_plan", return_value=plan):
+                plan["workflow_run_attempt"] = "1"
+                with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {"GITHUB_RUN_ATTEMPT": "3"}), patch.object(release, "run") as command, patch.object(release, "complete_plan", return_value=plan):
                     manifest_path = Path(directory)/"release-manifest.json"
                     release.finish(self.github, plan, report, manifest_path)
                     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
                     self.assertEqual(manifest["version"], version)
+                    self.assertEqual(manifest["workflow_run_attempt"], "3")
                     self.assertEqual(manifest["validation"], report)
                     if channel == "stable":
                         command.assert_called_once()
