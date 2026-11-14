@@ -138,7 +138,7 @@ func TestPublisherRequiresConfirmAndDetectsMandatoryReturn(t *testing.T) {
 			wire, peer := net.Pipe()
 			defer peer.Close()
 			session := &fakeSession{returned: make(chan amqp.Return, 1), unroutable: mode == "unroutable", negative: mode == "negative"}
-			p := newPublisher(session, wire, Config{Exchange: "events", TopicPrefix: "dev.", OperationTimeout: time.Second}, wire.Close)
+			p := newPublisher(session, wire, Config{Exchange: "events", TopicPrefix: "dev.", OperationTimeout: time.Second}, map[string]string{"orders": "dev.orders"}, wire.Close)
 			defer p.Close(context.Background())
 			message := eventadapter.Message{EventName: "orders", Payload: []byte{0, 255}, Metadata: map[string]string{"trace": "123"}}
 			err := p.Publish(context.Background(), message)
@@ -165,7 +165,7 @@ func TestPublisherConcurrentWaitCanBeCanceled(t *testing.T) {
 	defer peer.Close()
 	started := make(chan struct{})
 	session := &fakeSession{returned: make(chan amqp.Return, 1), wait: true, started: started}
-	p := newPublisher(session, wire, Config{Exchange: "events", OperationTimeout: time.Second}, func() error { _ = wire.Close(); return nil })
+	p := newPublisher(session, wire, Config{Exchange: "events", OperationTimeout: time.Second}, map[string]string{"orders": "orders"}, func() error { _ = wire.Close(); return nil })
 	defer p.Close(context.Background())
 	firstCtx, cancelFirst := context.WithCancel(context.Background())
 	result := make(chan error, 1)
@@ -234,7 +234,7 @@ func TestStartupCancellationUnblocksAMQPHandshake(t *testing.T) {
 			}
 		}
 	}()
-	f, err := NewFactory(Config{URL: "amqp://guest:guest@" + listener.Addr().String(), Exchange: "events", Publish: true, AllowInsecureTransport: true, StartupTimeout: 50 * time.Millisecond})
+	f, err := NewFactory(Config{URL: "amqp://guest:guest@" + listener.Addr().String(), Exchange: "events", Publish: true, PublishDestinations: testDestinations{"orders"}, AllowInsecureTransport: true, StartupTimeout: 50 * time.Millisecond})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -244,3 +244,7 @@ func TestStartupCancellationUnblocksAMQPHandshake(t *testing.T) {
 	}
 	<-done
 }
+
+type testDestinations []string
+
+func (d testDestinations) PublishDestinations() []string { return d }

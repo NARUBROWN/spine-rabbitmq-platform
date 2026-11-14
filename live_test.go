@@ -44,7 +44,7 @@ func TestLiveRabbitMQConfirmRequeueAndDeadLetter(t *testing.T) {
 	if err := ch.QueueBind(dlq, "dead", dlx, false, nil); err != nil {
 		t.Fatal(err)
 	}
-	config := platform.Config{URL: address, Exchange: name, Consume: true, Publish: true, QueuePrefix: name + ".", TopicPrefix: "route.", FailurePolicy: platform.FailureRequeue, DeadLetter: &platform.DeadLetter{Exchange: dlx, RoutingKey: "dead"}, AllowInsecureTransport: true}
+	config := platform.Config{URL: address, Exchange: name, Consume: true, Publish: true, PublishDestinations: testDestinations{"orders", "missing"}, QueuePrefix: name + ".", TopicPrefix: "route.", FailurePolicy: platform.FailureRequeue, DeadLetter: &platform.DeadLetter{Exchange: dlx, RoutingKey: "dead"}, AllowInsecureTransport: true}
 	f, err := platform.NewFactory(config)
 	if err != nil {
 		t.Fatal(err)
@@ -62,6 +62,9 @@ func TestLiveRabbitMQConfirmRequeueAndDeadLetter(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer p.Close(context.Background())
+	if err := p.Publish(ctx, eventadapter.Message{EventName: "unregistered"}); !errors.Is(err, eventadapter.ErrInvalidAdapter) {
+		t.Fatalf("미등록 목적지를 거절해야 합니다: %v", err)
+	}
 	if err := p.Publish(ctx, eventadapter.Message{EventName: "missing", Payload: []byte("unroutable")}); !errors.Is(err, platform.ErrUnroutable) {
 		t.Fatalf("mandatory return을 받지 못했습니다: %v", err)
 	}
@@ -133,3 +136,7 @@ func TestLiveRabbitMQConfirmRequeueAndDeadLetter(t *testing.T) {
 		}
 	}
 }
+
+type testDestinations []string
+
+func (d testDestinations) PublishDestinations() []string { return d }

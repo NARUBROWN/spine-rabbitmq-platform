@@ -8,7 +8,11 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"reflect"
+	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	eventadapter "github.com/NARUBROWN/spine/contract/event"
 	amqp "github.com/rabbitmq/amqp091-go"
@@ -26,6 +30,11 @@ type DeadLetter struct {
 	RoutingKey string
 }
 
+// DestinationSource는 앱이 발행할 논리 목적지 목록을 제공합니다.
+type DestinationSource interface {
+	PublishDestinations() []string
+}
+
 // Config는 durable topic exchange의 송수신과 실패 정책을 설정합니다.
 type Config struct {
 	URL                    string
@@ -34,6 +43,7 @@ type Config struct {
 	Publish                bool
 	QueuePrefix            string
 	TopicPrefix            string
+	PublishDestinations    DestinationSource
 	PrefetchCount          int
 	FailurePolicy          FailurePolicy
 	DeadLetter             *DeadLetter
@@ -43,7 +53,10 @@ type Config struct {
 	OperationTimeout       time.Duration
 }
 
-type factory struct{ config Config }
+type factory struct {
+	config       Config
+	destinations map[string]string
+}
 
 // NewFactory는 설정만 검사하고 복사하며 브로커에 연결하지 않습니다.
 func NewFactory(config Config) (eventadapter.Factory, error) {
@@ -85,7 +98,13 @@ func NewFactory(config Config) (eventadapter.Factory, error) {
 	if config.OperationTimeout == 0 {
 		config.OperationTimeout = 5 * time.Second
 	}
-	return &factory{config: config}, nil
+	destinations, err := resolveDestinations(config)
+	if err != nil {
+		return nil, err
+	}
+	// 초기화 후에는 호출자가 목록을 바꿔도 발행 경로에 영향을 주지 않습니다.
+	config.PublishDestinations = nil
+	return &factory{config: config, destinations: destinations}, nil
 }
 
 func (f *factory) Capabilities() eventadapter.Capabilities {
@@ -238,7 +257,7 @@ func (f *factory) NewPublisher(ctx context.Context) (eventadapter.Publisher, err
 		return nil, err
 	}
 	p := newPublisher(&nativeSession{ch: ch, returned: ch.NotifyReturn(make(chan amqp.Return, 1))}, wire,
-		f.config, func() error { return closeConnection(conn, wire) })
+		f.config, f.destinations, func() error { return closeConnection(conn, wire) })
 	ready = true
 	return p, nil
 }
@@ -263,4 +282,40 @@ func withIO(ctx context.Context, wire net.Conn, timeout time.Duration, operation
 	}
 	clearErr := wire.SetWriteDeadline(time.Time{})
 	return errors.Join(err, clearErr)
+}
+
+func resolveDestinations(config Config) (map[string]string, error) {
+	if !config.Publish {
+		return nil, nil
+	}
+	source := config.PublishDestinations
+	if source == nil || nilDestinationSource(source) {
+		return nil, fmt.Errorf("%w: set Config.PublishDestinations when publishing is enabled", eventadapter.ErrInvalidAdapter)
+	}
+	names := source.PublishDestinations()
+	if len(names) == 0 {
+		return nil, fmt.Errorf("%w: Config.PublishDestinations returned no destinations", eventadapter.ErrInvalidAdapter)
+	}
+	destinations := make(map[string]string, len(names))
+	for _, name := range names {
+		address := config.TopicPrefix + name
+		if strings.TrimSpace(name) == "" || !utf8.ValidString(address) || len(address) > 255 || strings.IndexFunc(address, unicode.IsControl) >= 0 {
+			return nil, fmt.Errorf("%w: invalid rabbitmq destination %q", eventadapter.ErrInvalidAdapter, name)
+		}
+		if _, exists := destinations[name]; exists {
+			return nil, fmt.Errorf("%w: duplicate rabbitmq destination %q", eventadapter.ErrInvalidAdapter, name)
+		}
+		destinations[name] = address
+	}
+	return destinations, nil
+}
+
+func nilDestinationSource(source DestinationSource) bool {
+	value := reflect.ValueOf(source)
+	switch value.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+		return value.IsNil()
+	default:
+		return false
+	}
 }
