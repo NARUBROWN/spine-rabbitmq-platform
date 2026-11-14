@@ -22,7 +22,7 @@ import (
 )
 
 func buildWorker() (spine.App, error) {
-    factory, err := rabbitmqplatform.NewFactory(rabbitmqplatform.Config{URL: "amqps://rabbitmq.example.com:5671/", Exchange: "events", Consume: true, Publish: true})
+    factory, err := rabbitmqplatform.NewFactory(rabbitmqplatform.Config{URL: "amqps://rabbitmq.example.com:5671/", Exchange: "events", Consume: true, Publish: true, PublishDestinations: destinations.Catalog{}})
     if err != nil { return nil, err }
     return spine.New(spine.WithEventAdapter("rabbitmq", factory)), nil
 }
@@ -59,7 +59,22 @@ func consumeOne(ctx context.Context) error {
 }
 ```
 
-발행은 `Config.Publish: true`와 `factory.NewPublisher(ctx)`를 사용합니다. `Publish(ctx, eventadapter.Message{EventName: ..., Payload: ...})`에는 이미 직렬화한 본문을 넘깁니다. 본문 형식을 가정하거나 다시 직렬화하지 않습니다.
+발행은 `Config.Publish: true`, `Config.PublishDestinations`와 `factory.NewPublisher(ctx)`를 사용합니다. `Publish(ctx, eventadapter.Message{EventName: ..., Payload: ...})`에는 이미 직렬화한 본문을 넘깁니다. 본문 형식을 가정하거나 다시 직렬화하지 않습니다.
+
+발행을 켜면 `PublishDestinations() []string`을 구현한 값을 설정에 넣습니다. 발행자는 기존 topic exchange를 준비하고 등록된 이름에 prefix를 적용해 routing key로 사용합니다. 소비 큐의 바인딩이 없으면 mandatory 발행 결과로 `ErrUnroutable`을 반환합니다.
+
+```go
+// destinations.go
+package destinations
+
+const OrderCreated = "orders.created"
+
+type Catalog struct{}
+
+func (Catalog) PublishDestinations() []string {
+    return []string{OrderCreated}
+}
+```
 
 ## 설정
 
@@ -68,6 +83,7 @@ func consumeOne(ctx context.Context) error {
 | `URL` | AMQP 연결 문자열. 기본적으로 `amqps://`가 필요합니다. |
 | `Exchange` | durable topic exchange 이름. 필수이며 기본 exchange는 지원하지 않습니다. |
 | `Consume`, `Publish` | 읽기, 발행 역할을 각각 활성화합니다. 하나 이상 필요합니다. |
+| `PublishDestinations` | 발행 시 필수인 논리 목적지 목록 제공자입니다. |
 | `QueuePrefix` | 논리 구독 키 앞에 붙일 큐 이름 접두사. 기본은 빈 문자열입니다. |
 | `TopicPrefix` | 발행 이름과 구독 binding key 앞에 같은 접두사를 붙입니다. |
 | `PrefetchCount` | 기본 1. 양수로 지정할 수 있지만 Reader는 한 번에 하나의 전달만 커널에 넘깁니다. |

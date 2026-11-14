@@ -35,16 +35,17 @@ func (s *nativeSession) Publish(exchange, key string, message amqp.Publishing) (
 func (s *nativeSession) Returns() <-chan amqp.Return { return s.returned }
 
 type publisher struct {
-	session publishSession
-	wire    net.Conn
-	config  Config
-	serial  chan struct{}
-	invalid atomic.Bool
-	life    *lifecycle
+	session      publishSession
+	wire         net.Conn
+	config       Config
+	destinations map[string]string
+	serial       chan struct{}
+	invalid      atomic.Bool
+	life         *lifecycle
 }
 
-func newPublisher(session publishSession, wire net.Conn, config Config, close func() error) *publisher {
-	p := &publisher{session: session, wire: wire, config: config, serial: make(chan struct{}, 1)}
+func newPublisher(session publishSession, wire net.Conn, config Config, destinations map[string]string, close func() error) *publisher {
+	p := &publisher{session: session, wire: wire, config: config, destinations: destinations, serial: make(chan struct{}, 1)}
 	p.life = newLifecycle(nil, close)
 	return p
 }
@@ -57,8 +58,9 @@ func (p *publisher) Publish(ctx context.Context, message eventadapter.Message) e
 		return err
 	}
 	defer p.life.leave()
-	if message.EventName == "" {
-		return fmt.Errorf("%w: event name is empty", eventadapter.ErrInvalidAdapter)
+	routingKey, registered := p.destinations[message.EventName]
+	if !registered {
+		return fmt.Errorf("%w: RabbitMQ publish destination %q is not registered", eventadapter.ErrInvalidAdapter, message.EventName)
 	}
 	select {
 	case p.serial <- struct{}{}:
@@ -76,7 +78,7 @@ func (p *publisher) Publish(ctx context.Context, message eventadapter.Message) e
 	native := amqp.Publishing{DeliveryMode: amqp.Persistent, Body: slices.Clone(message.Payload),
 		Timestamp: message.OccurredAt, Type: message.EventName, Headers: headers}
 	err := withIO(ctx, p.wire, p.config.OperationTimeout, func(operationCtx context.Context) error {
-		confirmed, err := p.session.Publish(p.config.Exchange, p.config.TopicPrefix+message.EventName, native)
+		confirmed, err := p.session.Publish(p.config.Exchange, routingKey, native)
 		if err != nil {
 			return err
 		}
