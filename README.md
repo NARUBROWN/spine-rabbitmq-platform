@@ -1,19 +1,20 @@
+English | [Korean](README.ko.md)
+
 # Spine RabbitMQ Platform
 
-RabbitMQ를 Spine의 공개 이벤트 계약 `spine.event-adapter/v1`에 연결하는 Go 모듈입니다. `adapter/event`의 Factory, Reader, Delivery와 Publisher를 구현하며 도메인 이벤트, DI나 커널 내부 패키지를 import하지 않습니다.
+A Go module connecting RabbitMQ to Spine's public event contract, `spine.event-adapter/v1`. It implements Factory, Reader, Delivery, and Publisher from `adapter/event`, without importing domain events, DI, or kernel internals.
 
-## Preview 설치
+## Preview installation
 
-개발 중인 기능을 시험하고 호환성 문제를 확인하는 채널입니다. 공개 태그는 [`v0.2.0-preview.3`](https://github.com/NARUBROWN/spine-rabbitmq-platform/tree/v0.2.0-preview.3)입니다. 이 태그의 `go.mod`는 Spine `v0.7.0-preview.4`와 Go 1.25.5 이상을 지정합니다. 이 브랜치의 릴리스 정책 기준 버전은 `v0.2.0`입니다.
+Use this channel to try features under development and check compatibility. The published tag is [`v0.2.0-preview.3`](https://github.com/NARUBROWN/spine-rabbitmq-platform/tree/v0.2.0-preview.3). Its `go.mod` specifies Spine `v0.7.0-preview.4` and Go 1.25.5 or later. The release policy on this branch targets `v0.2.0`.
 
 ```sh
 go get github.com/NARUBROWN/spine-rabbitmq-platform@v0.2.0-preview.3
 ```
 
-다른 채널은 [RC](https://github.com/NARUBROWN/spine-rabbitmq-platform/tree/rc) | [Stable](https://github.com/NARUBROWN/spine-rabbitmq-platform/tree/main)에서 확인하세요.
+Other channels: [RC](https://github.com/NARUBROWN/spine-rabbitmq-platform/tree/rc) | [Stable](https://github.com/NARUBROWN/spine-rabbitmq-platform/tree/main).
 
-
-App에는 `spine.WithEventAdapter(name, factory)`로 등록합니다. 브로커 연결은 이 플랫폼이, 소비 실행과 reader 재연결은 코어가 맡습니다. 아래는 HTTP 없는 워커 구성입니다. HTTP 앱은 `spine.New`에 Echo 플랫폼 옵션도 함께 넘깁니다. Spine v0.6.5의 공개 이벤트 계약과 App 연결 API를 사용합니다.
+Register the factory with `spine.WithEventAdapter(name, factory)`. The platform owns broker connections; the core owns consumer execution and reader recreation. The example below configures a worker without HTTP. HTTP applications also pass an Echo platform option to `spine.New`. It uses the public event contract and App integration API from Spine v0.6.5.
 
 ```go
 import (
@@ -28,9 +29,9 @@ func buildWorker() (spine.App, error) {
 }
 ```
 
-기존 consumer 생성자와 `app.Consumers().Register`를 등록한 뒤 `app.Run(boot.Options{})`로 실행합니다. 공통 정책은 `spine.WithEventConsumerRetry`와 `spine.WithEventSettlementTimeout`으로 조정합니다. Prepare는 reader를 보관하고 Run이 같은 준비 경로에서 소비를 시작합니다. [App 전환 안내](https://github.com/NARUBROWN/spine/blob/5d8ea93/docs/migration/event-platforms.md)를 참고하세요.
+Register consumer constructors and handlers with `app.Consumers().Register`, then run `app.Run(boot.Options{})`. Configure common policies with `spine.WithEventConsumerRetry` and `spine.WithEventSettlementTimeout`. Prepare retains readers, and Run starts consumption through the same preparation path. See the [App migration guide](https://github.com/NARUBROWN/spine/blob/5d8ea93/docs/migration/event-platforms.md).
 
-## 사용
+## Usage
 
 ```go
 import (
@@ -46,7 +47,7 @@ func consumeOne(ctx context.Context) error {
         Exchange: "events",
         Consume: true,
         FailurePolicy: rabbitmqplatform.FailureReject,
-        AllowInsecureTransport: true, // 격리된 로컬 개발 브로커에서만 사용합니다.
+        AllowInsecureTransport: true, // Use only with an isolated local development broker.
     })
     if err != nil { return err }
     reader, err := factory.NewReader(ctx, eventadapter.Subscription{Topic: "order.created"})
@@ -54,14 +55,14 @@ func consumeOne(ctx context.Context) error {
     defer reader.Close(context.Background())
     delivery, err := reader.Read(ctx)
     if err != nil { return err }
-    // delivery.Message()의 본문을 처리한 뒤 성공하면 Ack, 실패하면 Nack을 호출합니다.
+    // Process delivery.Message(), then call Ack on success or Nack on failure.
     return delivery.Ack(ctx)
 }
 ```
 
-발행은 `Config.Publish: true`, `Config.PublishDestinations`와 `factory.NewPublisher(ctx)`를 사용합니다. `Publish(ctx, eventadapter.Message{EventName: ..., Payload: ...})`에는 이미 직렬화한 본문을 넘깁니다. 본문 형식을 가정하거나 다시 직렬화하지 않습니다.
+Publish with `Config.Publish: true`, `Config.PublishDestinations`, and `factory.NewPublisher(ctx)`. Pass an already serialized body to `Publish(ctx, eventadapter.Message{EventName: ..., Payload: ...})`. The platform neither assumes a body format nor serializes it again.
 
-발행을 켜면 `PublishDestinations() []string`을 구현한 값을 설정에 넣습니다. 발행자는 기존 topic exchange를 준비하고 등록된 이름에 prefix를 적용해 routing key로 사용합니다. 소비 큐의 바인딩이 없으면 mandatory 발행 결과로 `ErrUnroutable`을 반환합니다.
+When enabling publishing, configure a value implementing `PublishDestinations() []string`. The publisher prepares the existing topic exchange and uses registered names with the prefix as routing keys. Without a matching consumer queue binding, mandatory publishing returns `ErrUnroutable`.
 
 ```go
 // destinations.go
@@ -76,37 +77,37 @@ func (Catalog) PublishDestinations() []string {
 }
 ```
 
-## 설정
+## Configuration
 
-| 필드 | 동작 |
+| Field | Behavior |
 | --- | --- |
-| `URL` | AMQP 연결 문자열. 기본적으로 `amqps://`가 필요합니다. |
-| `Exchange` | durable topic exchange 이름. 필수이며 기본 exchange는 지원하지 않습니다. |
-| `Consume`, `Publish` | 읽기, 발행 역할을 각각 활성화합니다. 하나 이상 필요합니다. |
-| `PublishDestinations` | 발행 시 필수인 논리 목적지 목록 제공자입니다. |
-| `QueuePrefix` | 논리 구독 키 앞에 붙일 큐 이름 접두사. 기본은 빈 문자열입니다. |
-| `TopicPrefix` | 발행 이름과 구독 binding key 앞에 같은 접두사를 붙입니다. |
-| `PrefetchCount` | 기본 1. 양수로 지정할 수 있지만 Reader는 한 번에 하나의 전달만 커널에 넘깁니다. |
-| `FailurePolicy` | 기본 `FailureReject`. `FailureRequeue`는 실패 메시지를 재큐잉합니다. |
-| `DeadLetter` | 선택적 dead-letter exchange와 routing key. DLX, 대상 큐, binding은 호출자가 준비합니다. |
-| `TLS` | TLS 설정을 복사합니다. 기본값은 TLS 1.2 이상입니다. |
-| `AllowInsecureTransport` | 기본 false. 로컬 평문 연결을 명시적으로 허용하며 TLS 설정과 함께 사용할 수 없습니다. |
-| `StartupTimeout` | 연결, exchange, queue, binding 준비 제한 시간. 기본 10초입니다. |
-| `OperationTimeout` | 확인, 발행과 publisher confirm 대기 제한 시간. 기본 5초입니다. |
+| `URL` | AMQP connection string; requires `amqps://` by default |
+| `Exchange` | Required durable topic exchange name; the default exchange is unsupported |
+| `Consume`, `Publish` | Enable reading and publishing independently; enable at least one |
+| `PublishDestinations` | Required provider of logical destinations when publishing |
+| `QueuePrefix` | Queue name prefix for logical subscription keys; empty by default |
+| `TopicPrefix` | Adds the same prefix to published names and subscription binding keys |
+| `PrefetchCount` | Defaults to 1. Positive values are allowed, but each Reader hands only one delivery at a time to the kernel. |
+| `FailurePolicy` | Defaults to `FailureReject`; `FailureRequeue` requeues failed messages |
+| `DeadLetter` | Optional dead-letter exchange and routing key. Callers provision the DLX, destination queue, and bindings. |
+| `TLS` | Copies the TLS configuration; defaults to TLS 1.2 or later |
+| `AllowInsecureTransport` | Defaults to false. Explicitly permits local plaintext connections; cannot be combined with TLS settings. |
+| `StartupTimeout` | Connection, exchange, queue, and binding readiness timeout; defaults to 10 seconds |
+| `OperationTimeout` | Settlement, publishing, and publisher confirm timeout; defaults to 5 seconds |
 
-factory 생성과 Capabilities 조회는 네트워크를 사용하지 않습니다. NewReader는 연결, durable exchange, queue 선언, binding, QoS와 consumer 구독을 완료합니다. NewPublisher는 exchange 선언과 confirm 설정을 완료합니다. 생성 context는 초기화만 제한하고 성공한 자원은 Close까지 유지됩니다.
+Factory creation and Capabilities queries do not access the network. NewReader connects, declares the durable exchange and queue, creates bindings, applies QoS, and starts the consumer subscription. NewPublisher declares the exchange and enables confirms. The creation context only bounds initialization; successful resources remain alive until Close.
 
-## 처리와 수명
+## Processing and resource lifetime
 
-- 한 Reader에서 미확인 전달은 하나입니다. Ack는 한 건만 확인하고 Nack은 설정에 따라 reject 또는 requeue합니다. 같은 전달의 중복 확인은 native 작업을 반복하지 않습니다. 확인 오류 뒤에는 Reader를 닫고 다시 생성해야 합니다.
-- 커널은 `Subscription.Topic`에 연결된 핸들러를 실행해야 합니다. AMQP Type은 Message.EventName에 보존하지만 핸들러 선택에 사용하지 않습니다. 문자열 AMQP headers만 Metadata에 옮기며 그 밖의 native header 타입은 생략합니다.
-- 발행은 persistent 메시지, `mandatory=true`와 publisher confirm을 사용합니다. 수신 큐가 없으면 `ErrUnroutable`, negative confirm이나 확인 시간 초과는 오류입니다. 발행 호출은 동시에 받을 수 있으며 한 native 세션에서는 순서대로 처리합니다.
-- 전송, 확인 오류로 세션이 불확실해지면 해당 자원에서 새 작업을 막습니다. 새 Publisher를 생성한 뒤 재시도해야 합니다. 자동 재발행은 수행하지 않습니다. 오류나 취소 전에 브로커가 수신했을 수 있어 중복 방지는 애플리케이션 책임입니다.
-- native 송신 메서드는 context를 무시하므로 플랫폼이 취소, 시간 초과 시 소켓을 닫아 대기를 해제합니다. 이 경우 확인 결과가 불확실할 수 있습니다.
-- Close는 새 작업을 막고 진행 중인 전달 확인, 발행이 끝난 뒤 연결을 한 번 정리합니다. context는 완료 대기만 제한하고 후속 Close로 다시 기다릴 수 있습니다. 정상 정리의 native 연결 종료에는 최대 5초를 사용합니다.
-- reject된 메시지의 보존은 실제 DLX 토폴로지에 달려 있습니다. DLX가 없으면 버려질 수 있습니다. Requeue는 영구 실패 메시지를 반복 전달할 수 있습니다.
+- Each Reader has one unsettled delivery. Ack acknowledges one message; Nack rejects or requeues it according to configuration. Duplicate settlement does not repeat native operations. After a settlement error, close and recreate the Reader.
+- The kernel runs the handler selected by `Subscription.Topic`. AMQP Type is preserved in Message.EventName but does not select the handler. Only string AMQP headers are copied to Metadata; other native header types are omitted.
+- Publishing uses persistent messages, `mandatory=true`, and publisher confirms. A missing receiving queue returns `ErrUnroutable`; negative confirms and confirmation timeouts return errors. Concurrent publish calls are serialized within each native session.
+- Transport or settlement errors that leave a session uncertain block further work on that resource. Create a new Publisher before retrying. There is no automatic republishing. The broker may have received a message before an error or cancellation, so the application must handle duplicates.
+- Native send methods ignore context; the platform closes the socket on cancellation or timeout to release the wait. Settlement outcomes may then be uncertain.
+- Close blocks new work, waits for in-flight settlement and publishing, and cleans up the connection once. The context only bounds waiting; later Close calls can wait again. Normal native connection shutdown is limited to 5 seconds.
+- Retention of rejected messages depends on the DLX topology. Without a DLX, messages may be discarded. Requeue can repeatedly redeliver messages that fail permanently.
 
-## 검증
+## Verification
 
 ```sh
 go test -race ./... -count=1
@@ -114,20 +115,20 @@ bash scripts/check-module-boundary.sh
 SPINE_TEST_RABBITMQ_URL=amqp://guest:guest@localhost:5672/ go test -race . -run '^TestLive' -count=1 -timeout=2m
 ```
 
-브로커 환경변수가 없으면 live 테스트는 건너뜁니다. Live 테스트는 binary 본문, header 왕복, mandatory return, publisher confirm, requeue 재전달과 reject 후 dead-letter 보존을 검사합니다. CI는 단위, race 검사와 RabbitMQ 기반 live 검사를 분리해서 실행합니다. 운영 TLS, 인증, 클러스터 장애는 별도로 검증해야 합니다.
+Live tests are skipped when broker environment variables are absent. They check binary bodies, header round trips, mandatory returns, publisher confirms, requeue redelivery, and dead-letter retention after rejection. CI runs unit, race, and RabbitMQ live checks separately. Production TLS, authentication, and cluster failures require separate validation.
 
-라이선스: [MIT](LICENSE). 계약: [Spine adapter/event](https://github.com/NARUBROWN/spine/tree/1889d66/adapter/event).
+License: [MIT](LICENSE). Contract: [Spine adapter/event](https://github.com/NARUBROWN/spine/tree/1889d66/adapter/event).
 
-## v0.1.0 호환 버전
+## v0.1.0 compatibility
 
-이 릴리스는 공개 계약을 포함한 Spine `v0.6.5` 이상을 요구합니다. 개인 경로의 `replace` 없이 정식 태그로 설치합니다.
+This release requires Spine `v0.6.5` or later, which includes the public contracts. Install the official tag without a `replace` pointing to a private path.
 
 ```sh
 go get github.com/NARUBROWN/spine-rabbitmq-platform@v0.1.0
 ```
 
-## 릴리스와 공개 계약
+## Releases and public contracts
 
-이 플랫폼은 자체 버전과 채널로 발행합니다. `go.mod`의 Spine 버전은 사용하는 공개 계약의 최소 의존성이며 코어 릴리스 채널과 별도로 관리합니다. CI와 공개 설치 검증은 이 모듈의 의존성으로 플랫폼 자체를 검사합니다. 새로운 코어와 기존 플랫폼 태그의 조합 검증은 코어 릴리스에서 수행합니다.
+This platform publishes its own versions and release channels. The Spine version in `go.mod` is the minimum dependency for its public contracts and is managed separately from the core release channel. CI and public installation checks verify the platform against this module's dependencies. Core releases verify combinations of a new core and existing platform tags.
 
-다음 발행 대상은 `v0.3.0`입니다.
+The next publication target is `v0.3.0`.
